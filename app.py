@@ -1,6 +1,9 @@
 import random
 import streamlit as st
 
+# FIX: Refactored check_guess into logic_utils.py using agent mode
+from logic_utils import check_guess
+
 def get_range_for_difficulty(difficulty: str):
     if difficulty == "Easy":
         return 1, 20
@@ -29,24 +32,6 @@ def parse_guess(raw: str):
     return True, value, None
 
 
-def check_guess(guess, secret):
-    if guess == secret:
-        return "Win", "🎉 Correct!"
-
-    try:
-        if guess > secret:
-            return "Too High", "📈 Go HIGHER!"
-        else:
-            return "Too Low", "📉 Go LOWER!"
-    except TypeError:
-        g = str(guess)
-        if g == secret:
-            return "Win", "🎉 Correct!"
-        if g > secret:
-            return "Too High", "📈 Go HIGHER!"
-        return "Too Low", "📉 Go LOWER!"
-
-
 def update_score(current_score: int, outcome: str, attempt_number: int):
     if outcome == "Win":
         points = 100 - 10 * (attempt_number + 1)
@@ -63,6 +48,18 @@ def update_score(current_score: int, outcome: str, attempt_number: int):
         return current_score - 5
 
     return current_score
+
+
+# FIX: one place that clears every piece of game state, used by init and New Game
+def reset_game(low: int, high: int):
+    """Put every piece of game state back to a fresh-start value."""
+    st.session_state.secret = random.randint(low, high)
+    st.session_state.attempts = 0
+    st.session_state.score = 0
+    st.session_state.status = "playing"
+    st.session_state.history = []
+    # FIX: bumping this changes the text_input key, which clears the old guess
+    st.session_state.game_id = st.session_state.get("game_id", 0) + 1
 
 st.set_page_config(page_title="Glitchy Guesser", page_icon="🎮")
 
@@ -89,38 +86,20 @@ low, high = get_range_for_difficulty(difficulty)
 st.sidebar.caption(f"Range: {low} to {high}")
 st.sidebar.caption(f"Attempts allowed: {attempt_limit}")
 
-if "secret" not in st.session_state:
-    st.session_state.secret = random.randint(low, high)
+# FIX: init through the same helper New Game uses so both start identical
+GAME_STATE_KEYS = ("secret", "attempts", "score", "status", "history", "game_id")
 
-if "attempts" not in st.session_state:
-    st.session_state.attempts = 1
-
-if "score" not in st.session_state:
-    st.session_state.score = 0
-
-if "status" not in st.session_state:
-    st.session_state.status = "playing"
-
-if "history" not in st.session_state:
-    st.session_state.history = []
+if any(key not in st.session_state for key in GAME_STATE_KEYS):
+    reset_game(low, high)
 
 st.subheader("Make a guess")
 
-st.info(
-    f"Guess a number between 1 and 100. "
-    f"Attempts left: {attempt_limit - st.session_state.attempts}"
-)
-
-with st.expander("Developer Debug Info"):
-    st.write("Secret:", st.session_state.secret)
-    st.write("Attempts:", st.session_state.attempts)
-    st.write("Score:", st.session_state.score)
-    st.write("Difficulty:", difficulty)
-    st.write("History:", st.session_state.history)
+# FIX: reserve the status slot here, fill it after the guess is processed
+info_slot = st.empty()
 
 raw_guess = st.text_input(
     "Enter your guess:",
-    key=f"guess_input_{difficulty}"
+    key=f"guess_input_{difficulty}_{st.session_state.game_id}",
 )
 
 col1, col2, col3 = st.columns(3)
@@ -132,19 +111,23 @@ with col3:
     show_hint = st.checkbox("Show hint", value=True)
 
 if new_game:
-    st.session_state.attempts = 0
-    st.session_state.secret = random.randint(1, 100)
-    st.success("New game started.")
+    # FIX: reset status/score/history too -- a stale "won" status made this button look dead
+    st.session_state.flash = "New game started."
+    reset_game(low, high)
     st.rerun()
 
+# FIX: st.rerun() wipes anything drawn before it, so carry the message across
+flash = st.session_state.pop("flash", None)
+if flash:
+    st.success(flash)
+
+# FIX: dropped st.stop() here -- it skipped the status line and debug panel once the game ended
 if st.session_state.status != "playing":
     if st.session_state.status == "won":
         st.success("You already won. Start a new game to play again.")
     else:
         st.error("Game over. Start a new game to try again.")
-    st.stop()
-
-if submit:
+elif submit:
     st.session_state.attempts += 1
 
     ok, guess_int, err = parse_guess(raw_guess)
@@ -155,6 +138,7 @@ if submit:
     else:
         st.session_state.history.append(guess_int)
 
+        # NOTE: secret turns into text on even turns -- check_guess handles it
         if st.session_state.attempts % 2 == 0:
             secret = str(st.session_state.secret)
         else:
@@ -186,6 +170,21 @@ if submit:
                     f"The secret was {st.session_state.secret}. "
                     f"Score: {st.session_state.score}"
                 )
+
+# FIX: drawn after the guess is recorded so attempts/history aren't a turn stale
+info_slot.info(
+    # FIX: was hardcoded to "1 and 100" even on Easy (1-20) and Hard (1-50)
+    f"Guess a number between {low} and {high}. "
+    f"Attempts left: {max(attempt_limit - st.session_state.attempts, 0)}"
+)
+
+# FIX: moved below the guess handler so history shows the guess just submitted
+with st.expander("Developer Debug Info"):
+    st.write("Secret:", st.session_state.secret)
+    st.write("Attempts:", st.session_state.attempts)
+    st.write("Score:", st.session_state.score)
+    st.write("Difficulty:", difficulty)
+    st.write("History:", st.session_state.history)
 
 st.divider()
 st.caption("Built by an AI that claims this code is production-ready.")

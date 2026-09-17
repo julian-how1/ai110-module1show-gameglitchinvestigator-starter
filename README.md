@@ -25,7 +25,8 @@ It wrote the code, ran away, and now the game is unplayable.
 
 ## 📝 Document Your Experience
 
-- [ ] Describe the game's purpose.
+- [ ] Describe the game's purpose
+
 - [ ] Detail which bugs you found.
 - [ ] Explain what fixes you applied.
 
@@ -33,11 +34,12 @@ It wrote the code, ran away, and now the game is unplayable.
 
 Describe your fixed game in numbered steps so a reader can follow along without watching a video:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+1. <!-- Describe this step --> User enters a guess: 77
+2. <!-- Describe this step --> Game returns "Too High"
+3. <!-- Describe this step --> User enters a guess: 44
+4. <!-- Describe this step --> Game returns "Too Low"
+5. <!-- Add more steps as needed --> User enters a guess: 57
+6. Game returns "You Win" and ends with the score being shown
 
 **Screenshot** *(optional)*: <!-- Insert a screenshot of your fixed, winning game here -->
 
